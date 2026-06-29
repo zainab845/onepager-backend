@@ -29,6 +29,19 @@ const sectionSchema = new mongoose.Schema({
 const Section = mongoose.model('Section', sectionSchema);
 
 
+// Hit this route once to create your initial admin account
+app.get('/api/auth/seed', async (req, res) => {
+    try {
+        const exists = await Admin.findOne({ email: 'admin@test.com' });
+        if (exists) return res.json({ message: 'Admin already exists!' });
+        
+        const newAdmin = new Admin({ email: 'admin@test.com', password: 'admin123' });
+        await newAdmin.save();
+        res.json({ message: 'Admin created successfully! You can now log in.' });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
 
 
 // --- AUTHENTICATION ROUTE ---
