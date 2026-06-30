@@ -3,6 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 
 const app = express();
 
@@ -43,7 +45,9 @@ app.use(async (req, res, next) => {
 // --- MONGOOSE MODELS ---
 const adminSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
-  password: { type: String, required: true }
+  password: { type: String, required: true },
+  resetToken: { type: String },
+  resetTokenExpiry: { type: Date },
 });
 const Admin = mongoose.model('Admin', adminSchema);
 
@@ -72,6 +76,73 @@ app.post('/api/auth/login', async (req, res) => {
     }
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, name: 'Admin', email: user.email });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// --- FORGOT PASSWORD ---
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await Admin.findOne({ email });
+
+    if (!user) {
+      // Don't reveal whether the email exists
+      return res.json({ message: 'If that email exists, a reset link has been sent.' });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    user.resetToken = resetToken;
+    user.resetTokenExpiry = Date.now() + 3600000; // 1 hour
+    await user.save();
+
+    const resetUrl = `${req.headers.origin || process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: user.email,
+      subject: 'Password Reset Request',
+      html: `
+        <p>You requested a password reset.</p>
+        <p>Click this link to reset your password (valid for 1 hour):</p>
+        <a href="${resetUrl}">${resetUrl}</a>
+      `,
+    });
+
+    res.json({ message: 'If that email exists, a reset link has been sent.' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// --- RESET PASSWORD ---
+app.post('/api/auth/reset-password/:token', async (req, res) => {
+  try {
+    const { password } = req.body;
+    const user = await Admin.findOne({
+      resetToken: req.params.token,
+      resetTokenExpiry: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired reset link' });
+    }
+
+    user.password = password;
+    user.resetToken = undefined;
+    user.resetTokenExpiry = undefined;
+    await user.save();
+
+    res.json({ message: 'Password has been reset successfully' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
