@@ -32,7 +32,6 @@ const connectDB = async () => {
   }
 };
 
-// Middleware to ensure DB is connected before every request
 app.use(async (req, res, next) => {
   try {
     await connectDB();
@@ -88,7 +87,6 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     const user = await Admin.findOne({ email });
 
     if (!user) {
-      // Don't reveal whether the email exists
       return res.json({ message: 'If that email exists, a reset link has been sent.' });
     }
 
@@ -97,7 +95,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     user.resetTokenExpiry = Date.now() + 3600000; // 1 hour
     await user.save();
 
-    const resetUrl = `${req.headers.origin || process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
     const transporter = nodemailer.createTransport({
       service: 'gmail',
