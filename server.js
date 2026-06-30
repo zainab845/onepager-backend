@@ -55,6 +55,14 @@ const sectionSchema = new mongoose.Schema({
 }, { timestamps: true });
 const Section = mongoose.model('Section', sectionSchema);
 
+const contactSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  email: { type: String, required: true },
+  website: { type: String },
+  message: { type: String, required: true },
+}, { timestamps: true });
+const Contact = mongoose.model('Contact', contactSchema);
+
 // --- AUTH ROUTES ---
 app.post('/api/auth/login', async (req, res) => {
   try {
@@ -78,6 +86,19 @@ app.get('/api/sections', async (req, res) => {
   try {
     const sections = await Section.find().sort({ order: 1 });
     res.json(sections);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.post('/api/contact', async (req, res) => {
+  try {
+    const { name, email, website, message } = req.body;
+    if (!name || !email || !message) {
+      return res.status(400).json({ message: 'Name, email and message are required' });
+    }
+    const contact = await Contact.create({ name, email, website, message });
+    res.status(201).json({ message: 'Message sent successfully!', contact });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
